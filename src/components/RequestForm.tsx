@@ -11,27 +11,92 @@ import { useAuth } from './auth/AuthProvider';
 import { useRequests } from '@/context/RequestContext';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Droplet, Phone, IdCard, MapPin, Loader2, Crosshair, Heart, Send } from 'lucide-react';
+import { User, Droplet, Phone, IdCard, MapPin, Loader2, Crosshair, Heart, Send, RefreshCw } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+interface FormData {
+  name: string;
+  bloodType: BloodType;
+  location: string;
+  coordinates: string;
+  contactNumber: string;
+  cnicId: string;
+  type: 'donor' | 'receiver';
+}
 
 const BLOOD_TYPES: BloodType[] = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+// Fix Leaflet default marker icon issue
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 const RequestForm = () => {
   const { user } = useAuth();
   const { addRequest } = useRequests();
   const [loading, setLoading] = useState(false);
   const [isDonor, setIsDonor] = useState(true);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: '',
-    bloodType: 'O+' as BloodType,
+    bloodType: 'O+',
     location: '',
+    coordinates: '',
     contactNumber: '',
     cnicId: '',
-    type: 'donor' as 'donor' | 'receiver',
+    type: 'donor',
   });
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [mapPosition, setMapPosition] = useState<[number, number] | null>(null);
 
   const handleTypeChange = (checked: boolean) => {
     setIsDonor(checked);
     setFormData(prev => ({ ...prev, type: checked ? 'donor' : 'receiver' }));
+  };
+
+  const handleLocationClick = async () => {
+    setLocationLoading(true);
+    try {
+      if (!navigator.geolocation) {
+        toast.error('Geolocation is not supported by your browser');
+        return;
+      }
+
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+      });
+
+      const { latitude, longitude } = position.coords;
+      
+      // Fetch location name using reverse geocoding
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+      );
+      const data = await response.json();
+      
+      // Format the location string
+      const locationName = data.display_name.split(',').slice(0, 3).join(', ');
+      
+      setFormData(prev => ({
+        ...prev,
+        location: locationName,
+        coordinates: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+      }));
+
+      // Update map position
+      setMapPosition([latitude, longitude]);
+      
+      toast.success('Location detected successfully');
+    } catch (error) {
+      console.error('Error getting location:', error);
+      toast.error('Failed to detect location. Please enter manually.');
+    } finally {
+      setLocationLoading(false);
+    }
   };
 
   const ensureProfileExists = async () => {
@@ -75,15 +140,14 @@ const RequestForm = () => {
       return;
     }
 
+    // Validate form data
+    if (!formData.name || !formData.bloodType || !formData.location || !formData.contactNumber || !formData.cnicId) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     try {
       setLoading(true);
-
-      // Ensure profile exists before submitting request
-      const profileExists = await ensureProfileExists();
-      if (!profileExists) {
-        toast.error('Failed to set up user profile. Please try again.');
-        return;
-      }
 
       // Create the request object
       const newRequest: BloodRequest = {
@@ -98,23 +162,35 @@ const RequestForm = () => {
         created_at: new Date().toISOString(),
       };
 
-      // Add request (this will handle both UI update and database insertion)
-      await addRequest(newRequest);
+      // First, try to insert directly into blood_requests
+      const { error: requestError } = await supabase
+        .from('blood_requests')
+        .insert([newRequest])
+        .select();
 
-      toast.success('Request submitted successfully!');
+      if (requestError) {
+        console.error('Error inserting request:', requestError);
+        throw new Error(requestError.message);
+      }
+
+      // If successful, update the UI and refresh requests
+      await addRequest(newRequest);
+      
+      toast.success(`Blood ${formData.type === 'donor' ? 'donation' : 'request'} submitted successfully!`);
       
       // Reset form
       setFormData({
         name: '',
         bloodType: 'O+',
         location: '',
+        coordinates: '',
         contactNumber: '',
         cnicId: '',
         type: isDonor ? 'donor' : 'receiver',
       });
     } catch (error: any) {
       console.error('Error submitting request:', error);
-      toast.error('Failed to submit request. Please try again.');
+      toast.error(error.message || 'Failed to submit request. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -200,19 +276,60 @@ const RequestForm = () => {
           </Select>
         </div>
 
-        <div>
-          <Label htmlFor="location" className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-            <MapPin className={`w-4 h-4 ${isDonor ? 'text-emerald-600 dark:text-emerald-500' : 'text-rose-600 dark:text-rose-500'}`} />
-            Location
-          </Label>
-          <Input
-            id="location"
-            value={formData.location}
-            onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-            required
-            placeholder="Enter your location"
-            className="mt-1.5 bg-white/50 dark:bg-gray-900/50 border-gray-200/50 dark:border-gray-700/50 focus:border-rose-500 dark:focus:border-rose-600 focus:ring-rose-500/20 dark:focus:ring-rose-600/20"
-          />
+        <div className="space-y-2">
+          <Label htmlFor="location">Location</Label>
+          <div className="flex gap-2">
+            <Input
+              id="location"
+              value={formData.location}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, location: e.target.value }))
+              }
+              placeholder="Enter your location"
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleLocationClick}
+              disabled={locationLoading}
+              className="shrink-0"
+            >
+              {locationLoading ? (
+                <div className="animate-spin">
+                  <RefreshCw className="h-4 w-4" />
+                </div>
+              ) : (
+                <MapPin className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          {formData.coordinates && (
+            <p className="text-xs text-muted-foreground">
+              Coordinates: {formData.coordinates}
+            </p>
+          )}
+          {mapPosition && (
+            <div className="mt-2 rounded-lg overflow-hidden border border-input">
+              <MapContainer
+                center={mapPosition}
+                zoom={13}
+                style={{ height: '200px', width: '100%' }}
+                className="z-0"
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <Marker position={mapPosition}>
+                  <Popup>
+                    {formData.location}
+                  </Popup>
+                </Marker>
+              </MapContainer>
+            </div>
+          )}
         </div>
 
         <div>

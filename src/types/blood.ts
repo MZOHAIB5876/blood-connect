@@ -17,6 +17,7 @@ export interface BloodRequest {
   name: string;
   blood_type: BloodType;
   location: string;
+  coordinates?: string;
   contact_number: string;
   cnic_id: string;
   type: 'donor' | 'receiver';

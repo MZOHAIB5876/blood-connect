@@ -4,27 +4,113 @@ import { useAuth } from './auth/AuthProvider';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { formatDistanceToNow } from 'date-fns';
 import { useRequests } from '@/context/RequestContext';
 import { 
   MapPin, 
   Phone, 
-  Calendar, 
   User2, 
-  Droplet, 
   Heart, 
   Trash2, 
   CreditCard,
-  ExternalLink
+  Navigation
 } from 'lucide-react';
 
 interface RequestListProps {
   type: 'donor' | 'receiver';
 }
 
+const RequestCard = ({ request, onDelete }: { request: BloodRequest; onDelete: () => Promise<void> }) => {
+  const handleFollowLocation = () => {
+    if (request.coordinates) {
+      const [lat, lng] = request.coordinates.split(',').map(coord => coord.trim());
+      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+      window.open(mapsUrl, '_blank');
+    } else {
+      // If no coordinates, try to search by location name
+      const searchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(request.location)}`;
+      window.open(searchUrl, '_blank');
+    }
+  };
+
+  return (
+    <Card className="w-full mb-4 overflow-hidden bg-card hover:bg-accent/50 transition-colors">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div className="flex items-center gap-3">
+          <CardTitle className="text-xl font-bold">{request.name}</CardTitle>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-8 px-3 inline-flex items-center text-sm font-semibold rounded-full bg-primary/10 text-primary">
+            {request.blood_type}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-3 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+            onClick={handleFollowLocation}
+            title="Follow Location"
+          >
+            <Navigation 
+              className="h-4 w-4 hover:scale-110 transition-transform" 
+              strokeWidth={2.5}
+            />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="text-sm space-y-3">
+        <div className="grid gap-2">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex items-center gap-2 min-w-[80px]">
+              <MapPin className="h-4 w-4" />
+              <span className="font-medium">Location:</span>
+            </div>
+            <span>{request.location || 'Not specified'}</span>
+          </div>
+          
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex items-center gap-2 min-w-[80px]">
+              <Phone className="h-4 w-4" />
+              <span className="font-medium">Phone:</span>
+            </div>
+            <span>{request.contact_number}</span>
+          </div>
+          
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex items-center gap-2 min-w-[80px]">
+              <CreditCard className="h-4 w-4" />
+              <span className="font-medium">CNIC:</span>
+            </div>
+            <span>{request.cnic_id}</span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => window.open(`tel:${request.contact_number}`)}
+          >
+            <Phone className="h-4 w-4" />
+            Contact
+          </Button>
+          
+          <Button
+            variant="destructive"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Request
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const RequestList = ({ type }: RequestListProps) => {
   const [loading, setLoading] = useState(false);
-  const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const { user } = useAuth();
   const { requests, deleteRequest } = useRequests();
 
@@ -44,124 +130,24 @@ const RequestList = ({ type }: RequestListProps) => {
     }
   };
 
-  const handleCardClick = (id: string) => {
-    setExpandedCard(expandedCard === id ? null : id);
-  };
-
-  const handleContact = (phoneNumber: string) => {
-    window.open(`tel:${phoneNumber}`);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
-      </div>
-    );
-  }
-
-  if (filteredRequests.length === 0) {
-    return (
-      <div className="text-center text-gray-500 py-8">
-        No {type}s available
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {filteredRequests.map((request) => (
-        <div
-          key={request.id}
-          className={`relative p-6 rounded-xl border backdrop-blur-sm shadow-sm transition-all duration-300 hover:shadow-md ${
-            request.type === 'donor'
-              ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/20'
-              : 'bg-rose-50/50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-800/20'
-          }`}
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div
-                className={`p-2 rounded-full ${
-                  request.type === 'donor'
-                    ? 'bg-emerald-100 dark:bg-emerald-800/30 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-rose-100 dark:bg-rose-800/30 text-rose-600 dark:text-rose-400'
-                }`}
-              >
-                {request.type === 'donor' ? (
-                  <Heart className="w-5 h-5" />
-                ) : (
-                  <Droplet className="w-5 h-5" />
-                )}
-              </div>
-              <div>
-                <h3 className={`font-medium ${
-                  request.type === 'donor'
-                    ? 'text-emerald-900 dark:text-emerald-100'
-                    : 'text-rose-900 dark:text-rose-100'
-                }`}>
-                  {request.name}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {request.type.charAt(0).toUpperCase() + request.type.slice(1)}
-                </p>
-              </div>
-            </div>
-            <span className={`px-3 py-1 text-sm font-medium rounded-full ${
-              request.type === 'donor'
-                ? 'bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300'
-                : 'bg-rose-100 dark:bg-rose-800/30 text-rose-700 dark:text-rose-300'
-            }`}>
-              {request.blood_type}
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center text-gray-600 dark:text-gray-400">
-              <MapPin className="w-4 h-4 mr-2" />
-              <span className="text-sm">{request.location}</span>
-            </div>
-            <div className="flex items-center text-gray-600 dark:text-gray-400">
-              <Phone className="w-4 h-4 mr-2" />
-              <span className="text-sm">{request.contact_number}</span>
-            </div>
-          </div>
-
-          <div className="absolute bottom-4 right-4">
-            <Button
-              size="sm"
-              variant="ghost"
-              className={`${
-                request.type === 'donor'
-                  ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-800/30'
-                  : 'text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-800/30'
-              }`}
-              onClick={() => handleContact(request.contact_number)}
-            >
-              Contact
-            </Button>
-            {user && user.id === request.user_id && (
-              <Button
-                size="sm"
-                variant="destructive"
-                className={`ml-2 ${
-                  request.type === 'donor'
-                    ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-800/30'
-                    : 'text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-800/30'
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(request.id);
-                }}
-                disabled={loading}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete Request
-              </Button>
-            )}
-          </div>
-        </div>
-      ))}
+    <div className="w-full max-w-2xl mx-auto space-y-4">
+      {filteredRequests.length === 0 ? (
+        <Card className="p-6 text-center">
+          <CardContent className="flex flex-col items-center gap-2">
+            <Heart className="h-12 w-12 text-muted-foreground/50" />
+            <p className="text-muted-foreground">No {type} requests found</p>
+          </CardContent>
+        </Card>
+      ) : (
+        filteredRequests.map((request) => (
+          <RequestCard
+            key={request.id}
+            request={request}
+            onDelete={() => handleDelete(request.id)}
+          />
+        ))
+      )}
     </div>
   );
 };

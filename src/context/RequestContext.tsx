@@ -15,71 +15,60 @@ const RequestContext = createContext<RequestContextType | undefined>(undefined);
 export function RequestProvider({ children }: { children: React.ReactNode }) {
   const [requests, setRequests] = useState<BloodRequest[]>([]);
 
-  const refreshRequests = async () => {
+  const fetchRequests = async () => {
     try {
       const { data, error } = await supabase
         .from('blood_requests')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setRequests(data || []);
+      if (error) {
+        console.error('Error fetching requests:', error);
+        throw error;
+      }
+
+      if (data) {
+        setRequests(data);
+      }
     } catch (error) {
-      console.error('Error fetching requests:', error);
-      toast.error('Failed to load requests');
+      console.error('Error in fetchRequests:', error);
+      toast.error('Failed to fetch requests');
     }
   };
 
-  const addRequest = useCallback(async (newRequest: BloodRequest) => {
-    // Optimistically add the request to the UI
-    setRequests(prev => [newRequest, ...prev]);
-
+  const addRequest = async (newRequest: BloodRequest) => {
     try {
-      const { error } = await supabase
-        .from('blood_requests')
-        .insert(newRequest);
-
-      if (error) {
-        // If there's an error, revert the optimistic update
-        setRequests(prev => prev.filter(r => r.id !== newRequest.id));
-        throw error;
-      }
+      setRequests(prev => [newRequest, ...prev]);
+      await fetchRequests(); // Refresh the list after adding
     } catch (error) {
-      console.error('Error adding request:', error);
-      toast.error('Failed to save request');
-      throw error;
+      console.error('Error in addRequest:', error);
+      toast.error('Failed to update requests list');
     }
-  }, []);
+  };
 
-  const deleteRequest = useCallback(async (id: string) => {
-    // Optimistically remove the request from the UI
-    const previousRequests = [...requests];
-    setRequests(prev => prev.filter(request => request.id !== id));
-
+  const deleteRequest = async (id: string) => {
     try {
       const { error } = await supabase
         .from('blood_requests')
         .delete()
         .eq('id', id);
 
-      if (error) {
-        // If there's an error, revert the optimistic update
-        setRequests(previousRequests);
-        throw error;
-      }
+      if (error) throw error;
+
+      setRequests(prev => prev.filter(request => request.id !== id));
+      await fetchRequests(); // Refresh the list after deleting
     } catch (error) {
-      console.error('Error deleting request:', error);
-      toast.error('Failed to delete request');
+      console.error('Error in deleteRequest:', error);
       throw error;
     }
-  }, [requests]);
+  };
 
   React.useEffect(() => {
-    refreshRequests();
+    fetchRequests();
   }, []);
 
   return (
-    <RequestContext.Provider value={{ requests, addRequest, deleteRequest, refreshRequests }}>
+    <RequestContext.Provider value={{ requests, addRequest, deleteRequest, fetchRequests }}>
       {children}
     </RequestContext.Provider>
   );
