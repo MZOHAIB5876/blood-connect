@@ -1,0 +1,52 @@
+.animated-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    transition: background-color 0.3s ease;
+}
+
+/* Light theme styles */
+:root[data-theme='light'] .animated-background {
+    background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+}
+
+/* Dark theme styles */
+:root[data-theme='dark'] .animated-background {
+    background: linear-gradient(to bottom, #1a1f2c, #131720);
+}
+
+.blood-cell {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(2px);
+    box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+/* Light theme blood cells */
+:root[data-theme='light'] .blood-cell {
+    background: rgba(239, 68, 68, 0.3);
+}
+
+/* Dark theme blood cells */
+:root[data-theme='dark'] .blood-cell {
+    background: rgba(255, 99, 99, 0.4);
+    box-shadow: 
+        inset 0 0 30px rgba(255, 255, 255, 0.3),
+        0 0 20px rgba(255, 99, 99, 0.2);
+}
+
+/* Add inner glow to cells */
+.blood-cell::after {
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 20%;
+    width: 30%;
+    height: 30%;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    filter: blur(3px);
+}
