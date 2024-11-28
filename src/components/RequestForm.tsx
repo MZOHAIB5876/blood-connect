@@ -52,6 +52,7 @@ const RequestForm = () => {
   });
   const [locationLoading, setLocationLoading] = useState(false);
   const [mapPosition, setMapPosition] = useState<[number, number] | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleTypeChange = (checked: boolean) => {
     setIsDonor(checked);
@@ -134,20 +135,19 @@ const RequestForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!user) {
-      toast.error('You must be logged in to submit a request');
-      return;
-    }
-
-    // Validate form data
-    if (!formData.name || !formData.bloodType || !formData.location || !formData.contactNumber || !formData.cnicId) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
+    setIsSubmitting(true);
 
     try {
-      setLoading(true);
+      if (!user) {
+        toast.error('You must be logged in to submit a request');
+        return;
+      }
+
+      // Validate form data
+      if (!formData.name || !formData.bloodType || !formData.location || !formData.contactNumber || !formData.cnicId) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
 
       // Create the request object
       const newRequest: BloodRequest = {
@@ -176,7 +176,7 @@ const RequestForm = () => {
       // If successful, update the UI and refresh requests
       await addRequest(newRequest);
       
-      toast.success(`Blood ${formData.type === 'donor' ? 'donation' : 'request'} submitted successfully!`);
+      toast.success(`Blood ${formData.type === 'donor' ? 'donation' : 'request'} submitted successfully! 🎉`);
       
       // Reset form
       setFormData({
@@ -192,7 +192,7 @@ const RequestForm = () => {
       console.error('Error submitting request:', error);
       toast.error(error.message || 'Failed to submit request. Please try again.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -364,14 +364,14 @@ const RequestForm = () => {
 
         <Button 
           type="submit" 
-          disabled={loading}
+          disabled={loading || isSubmitting}
           className={`w-full mt-6 ${
             isDonor 
               ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800' 
               : 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800'
           }`}
         >
-          {loading ? (
+          {loading || isSubmitting ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Submitting...

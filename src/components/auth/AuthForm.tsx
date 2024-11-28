@@ -51,7 +51,15 @@ export function AuthForm() {
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          if (error.status === 429) {
+            toast.error('Too many signup attempts. Please try again in a few minutes.');
+          } else {
+            toast.error(error.message);
+          }
+          return;
+        }
+
         toast.success('Check your email for the confirmation link!');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -59,7 +67,15 @@ export function AuthForm() {
           password: formData.password,
         });
 
-        if (error) throw error;
+        if (error) {
+          if (error.status === 429) {
+            toast.error('Too many login attempts. Please try again in a few minutes.');
+          } else {
+            toast.error(error.message);
+          }
+          return;
+        }
+
         toast.success('Successfully logged in!');
         navigate('/');
       }

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 interface RequestContextType {
   requests: BloodRequest[];
-  addRequest: (request: BloodRequest) => Promise<void>;
+  addRequest: (request: Omit<BloodRequest, 'id'>) => Promise<void>;
   deleteRequest: (id: string) => Promise<void>;
   refreshRequests: () => Promise<void>;
 }
@@ -36,10 +36,20 @@ export function RequestProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addRequest = async (newRequest: BloodRequest) => {
+  const addRequest = async (newRequest: Omit<BloodRequest, 'id'>) => {
     try {
-      setRequests(prev => [newRequest, ...prev]);
-      await fetchRequests(); // Refresh the list after adding
+      const { data, error } = await supabase
+        .from('blood_requests')
+        .insert([newRequest])
+        .select();
+
+      if (error) {
+        toast.error('Failed to create request: ' + error.message);
+        return;
+      }
+
+      setRequests(prev => [...prev, data[0]]);
+      toast.success('Blood request created successfully! ');
     } catch (error) {
       console.error('Error in addRequest:', error);
       toast.error('Failed to update requests list');
@@ -53,10 +63,13 @@ export function RequestProvider({ children }: { children: React.ReactNode }) {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        toast.error('Failed to delete request: ' + error.message);
+        return;
+      }
 
       setRequests(prev => prev.filter(request => request.id !== id));
-      await fetchRequests(); // Refresh the list after deleting
+      toast.success('Request deleted successfully! ');
     } catch (error) {
       console.error('Error in deleteRequest:', error);
       throw error;
