@@ -5,11 +5,10 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from './AuthProvider';
 import { Droplet } from 'lucide-react';
-import { AnimatedBackground } from '../ui/animated-background';
+import AnimatedBackground from '../AnimatedBackground';
 
 type AuthMode = 'login' | 'signup';
 
