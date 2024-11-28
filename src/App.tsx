@@ -270,18 +270,18 @@ function App() {
             <TooltipProvider>
               <BrowserRouter>
                 <Routes>
+                  <Route path="/auth" element={<AuthForm />} />
                   <Route
-                    path="/"
+                    path="/*"
                     element={
                       <ProtectedRoute>
                         <AppContent />
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/auth" element={<AuthForm />} />
                 </Routes>
+                <Toaster />
               </BrowserRouter>
-              <Toaster />
             </TooltipProvider>
           </RequestProvider>
         </AuthProvider>
