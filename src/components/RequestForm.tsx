@@ -133,8 +133,8 @@ const RequestForm = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setIsSubmitting(true);
 
     try {
@@ -149,34 +149,19 @@ const RequestForm = () => {
         return;
       }
 
-      // Create the request object
-      const newRequest: BloodRequest = {
-        id: uuidv4(),
-        user_id: user.id,
+      const newRequest = {
         name: formData.name,
         blood_type: formData.bloodType,
         location: formData.location,
+        coordinates: formData.coordinates || '0,0',
         contact_number: formData.contactNumber,
         cnic_id: formData.cnicId,
         type: formData.type,
-        created_at: new Date().toISOString(),
+        status: 'active' as const,
+        user_id: user.id
       };
 
-      // First, try to insert directly into blood_requests
-      const { error: requestError } = await supabase
-        .from('blood_requests')
-        .insert([newRequest])
-        .select();
-
-      if (requestError) {
-        console.error('Error inserting request:', requestError);
-        throw new Error(requestError.message);
-      }
-
-      // If successful, update the UI and refresh requests
       await addRequest(newRequest);
-      
-      toast.success(`Blood ${formData.type === 'donor' ? 'donation' : 'request'} submitted successfully! 🎉`);
       
       // Reset form
       setFormData({
@@ -188,6 +173,10 @@ const RequestForm = () => {
         cnicId: '',
         type: isDonor ? 'donor' : 'receiver',
       });
+      
+      // Reset map position
+      setMapPosition(null);
+      
     } catch (error: any) {
       console.error('Error submitting request:', error);
       toast.error(error.message || 'Failed to submit request. Please try again.');

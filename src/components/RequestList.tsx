@@ -1,32 +1,27 @@
-import { useState } from 'react';
-import { BloodRequest } from '../types/blood';
-import { useAuth } from './auth/AuthProvider';
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '../components/auth/AuthProvider';
+import { useRequests } from '../context/RequestContext';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { useRequests } from '@/context/RequestContext';
-import { 
-  MapPin, 
-  Phone, 
-  User2, 
-  Heart, 
-  Trash2, 
-  CreditCard,
-  Navigation
-} from 'lucide-react';
+import { MapPin, Phone, CreditCard, Navigation, Trash2, Heart } from 'lucide-react';
+import { BloodRequest } from '../types/blood';
 
 interface RequestListProps {
   type: 'donor' | 'receiver';
 }
 
 const RequestCard = ({ request, onDelete }: { request: BloodRequest; onDelete: () => Promise<void> }) => {
+  const { user } = useAuth();
+  
+  console.log('Rendering request:', request); // Debug log
+
   const handleFollowLocation = () => {
     if (request.coordinates) {
       const [lat, lng] = request.coordinates.split(',').map(coord => coord.trim());
       const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
       window.open(mapsUrl, '_blank');
     } else {
-      // If no coordinates, try to search by location name
       const searchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(request.location)}`;
       window.open(searchUrl, '_blank');
     }
@@ -94,15 +89,17 @@ const RequestCard = ({ request, onDelete }: { request: BloodRequest; onDelete: (
             Contact
           </Button>
           
-          <Button
-            variant="destructive"
-            size="sm"
-            className="flex items-center gap-2"
-            onClick={onDelete}
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete Request
-          </Button>
+          {request.user_id === user?.id && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Request
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -112,15 +109,26 @@ const RequestCard = ({ request, onDelete }: { request: BloodRequest; onDelete: (
 const RequestList = ({ type }: RequestListProps) => {
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
-  const { requests, deleteRequest } = useRequests();
+  const { requests, deleteRequest, fetchRequests } = useRequests();
 
-  // Filter requests by type
-  const filteredRequests = requests.filter(request => request.type === type);
+  console.log('All requests:', requests); // Debug log
+
+  // Filter requests by type and sort by created_at
+  const filteredRequests = requests
+    .filter(request => request.type === type)
+    .sort((a, b) => {
+      if (!a.created_at || !b.created_at) return 0;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+  console.log('Filtered requests:', filteredRequests); // Debug log
 
   const handleDelete = async (id: string) => {
+    if (!id) return;
     try {
       setLoading(true);
       await deleteRequest(id);
+      await fetchRequests(); // Refresh the list after deletion
       toast.success('Request deleted successfully');
     } catch (error) {
       console.error('Error deleting request:', error);
@@ -129,6 +137,11 @@ const RequestList = ({ type }: RequestListProps) => {
       setLoading(false);
     }
   };
+
+  // Fetch requests immediately and set up auto-refresh
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
@@ -144,7 +157,7 @@ const RequestList = ({ type }: RequestListProps) => {
           <RequestCard
             key={request.id}
             request={request}
-            onDelete={() => handleDelete(request.id)}
+            onDelete={() => request.id && handleDelete(request.id)}
           />
         ))
       )}

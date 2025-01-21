@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
+import { useRouter } from 'next/navigation';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { supabase } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
 import { Droplet } from 'lucide-react';
@@ -16,13 +18,18 @@ export function AuthForm() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     confirmPassword: '',
     name: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
+
+  const togglePasswordVisibility = () => {
+    setShowPassword((prev) => !prev);
+  };
 
   useEffect(() => {
     if (user) {
@@ -30,17 +37,12 @@ export function AuthForm() {
     }
   }, [user, navigate]);
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setIsLoading(true);
 
     try {
       if (mode === 'signup') {
-        if (formData.password !== formData.confirmPassword) {
-          toast.error('Passwords do not match');
-          return;
-        }
-
         const { error } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
@@ -51,16 +53,8 @@ export function AuthForm() {
           },
         });
 
-        if (error) {
-          if (error.status === 429) {
-            toast.error('Too many signup attempts. Please try again in a few minutes.');
-          } else {
-            toast.error(error.message);
-          }
-          return;
-        }
-
-        toast.success('Check your email for the confirmation link!');
+        if (error) throw error;
+        toast.success('Check your email to verify your account!');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: formData.email,
@@ -68,21 +62,17 @@ export function AuthForm() {
         });
 
         if (error) {
-          if (error.status === 429) {
-            toast.error('Too many login attempts. Please try again in a few minutes.');
-          } else {
-            toast.error(error.message);
-          }
-          return;
+          toast.error('Invalid login credentials');
+          throw error;
         }
-
-        toast.success('Successfully logged in!');
-        navigate('/');
+        
+        toast.success('Successfully signed in!');
+        navigate('/dashboard');
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error) {
+      console.error('Authentication error:', error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -107,7 +97,7 @@ export function AuthForm() {
           </p>
         </div>
 
-        <form onSubmit={handleEmailAuth} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <AnimatePresence mode="wait">
             {mode === 'signup' && (
               <motion.div
@@ -118,7 +108,7 @@ export function AuthForm() {
                 className="overflow-hidden"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="name" className="text-rose-700 dark:text-rose-300">Full Name</Label>
                   <Input
                     id="name"
                     type="text"
@@ -127,6 +117,7 @@ export function AuthForm() {
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
+                    className="bg-black/80 border-rose-300/20 focus:border-rose-500 hover:border-rose-400 transition-all duration-200 rounded-md w-full placeholder:text-gray-500 text-white"
                     required={mode === 'signup'}
                   />
                 </div>
@@ -135,31 +126,36 @@ export function AuthForm() {
           </AnimatePresence>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-rose-700 dark:text-rose-300">Email</Label>
             <Input
               id="email"
               type="email"
               placeholder="you@example.com"
               value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="bg-black/80 border-rose-300/20 focus:border-rose-500 hover:border-rose-400 transition-all duration-200 rounded-md w-full placeholder:text-gray-500 text-white"
               required
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+          <div className="relative">
             <Input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              className="bg-black/80 border-rose-300/20 focus:border-rose-500 hover:border-rose-400 transition-all duration-200 rounded-md w-full placeholder:text-gray-500 text-white"
               required
             />
+            <Button
+              onClick={togglePasswordVisibility}
+              type="button"
+              variant="ghost"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0 h-auto text-rose-300 hover:text-rose-400"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
           </div>
 
           <AnimatePresence mode="wait">
@@ -171,21 +167,25 @@ export function AuthForm() {
                 transition={{ duration: 0.2, ease: 'easeInOut' }}
                 className="overflow-hidden"
               >
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <div className="space-y-2 relative">
+                  <Label htmlFor="confirmPassword" className="text-rose-700 dark:text-rose-300">Confirm Password</Label>
                   <Input
                     id="confirmPassword"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={formData.confirmPassword}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        confirmPassword: e.target.value,
-                      })
-                    }
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    className="bg-black/80 border-rose-300/20 focus:border-rose-500 hover:border-rose-400 transition-all duration-200 rounded-md w-full placeholder:text-gray-500 text-white"
                     required={mode === 'signup'}
                   />
+                  <Button
+                    onClick={togglePasswordVisibility}
+                    type="button"
+                    variant="ghost"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0 h-auto text-rose-300 hover:text-rose-400"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                 </div>
               </motion.div>
             )}
@@ -193,18 +193,16 @@ export function AuthForm() {
 
           <Button
             type="submit"
-            className="w-full"
-            disabled={loading}
+            className="w-full bg-rose-600 hover:bg-rose-700 text-white transition-colors"
+            disabled={isLoading}
           >
-            {loading ? (
-              <div className="flex items-center gap-2">
+            {isLoading ? (
+              <div className="flex items-center justify-center gap-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                {mode === 'login' ? 'Signing in...' : 'Creating account...'}
+                {mode === 'signup' ? 'Signing up...' : 'Signing in...'}
               </div>
-            ) : mode === 'login' ? (
-              'Sign In'
             ) : (
-              'Create Account'
+              <>{mode === 'signup' ? 'Sign up' : 'Sign in'}</>
             )}
           </Button>
         </form>
